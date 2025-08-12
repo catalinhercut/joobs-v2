@@ -1,0 +1,192 @@
+{
+  "name": "Sample Webhook Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook-sample",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "sample-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "operation": "equal",
+              "value2": "user_signup"
+            }
+          ]
+        }
+      },
+      "id": "if-1",
+      "name": "Check Action Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process user signup data\nconst userData = $input.first().json;\n\n// Extract user information\nconst user = {\n  id: userData.user_id || 'unknown',\n  email: userData.email || 'no-email',\n  name: userData.name || 'Unknown User',\n  signup_date: new Date().toISOString(),\n  source: userData.source || 'web'\n};\n\n// Log the signup\nconsole.log('New user signup:', user);\n\n// Return processed data\nreturn {\n  json: {\n    message: 'User signup processed successfully',\n    user: user,\n    timestamp: new Date().toISOString(),\n    next_action: 'send_welcome_email'\n  }\n};"
+      },
+      "id": "function-1",
+      "name": "Process User Signup",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log other actions\nconst data = $input.first().json;\n\nconsole.log('Other action received:', data.action);\n\nreturn {\n  json: {\n    message: 'Action logged',\n    action: data.action,\n    timestamp: new Date().toISOString(),\n    status: 'processed'\n  }\n};"
+      },
+      "id": "function-2",
+      "name": "Log Other Actions",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "url": "https://api.example.com/send-email",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{$json.user.email}}\",\n  \"subject\": \"Welcome to our platform!\",\n  \"template\": \"welcome\",\n  \"data\": {\n    \"name\": \"{{$json.user.name}}\",\n    \"signup_date\": \"{{$json.user.signup_date}}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "http-1",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"{{$json.message}}\",\n  \"timestamp\": \"{{$json.timestamp}}\"\n}"
+      },
+      "id": "respond-1",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Action Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Action Type": {
+      "main": [
+        [
+          {
+            "node": "Process User Signup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Other Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process User Signup": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Other Actions": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "UTC",
+    "saveExecutionProgress": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "sample-webhook-automation",
+  "tags": [
+    {
+      "id": "automation",
+      "name": "automation"
+    },
+    {
+      "id": "webhook",
+      "name": "webhook"
+    },
+    {
+      "id": "sample",
+      "name": "sample"
+    }
+  ]
+}

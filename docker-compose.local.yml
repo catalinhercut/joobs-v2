@@ -33,18 +33,71 @@ services:
     ports:
       - "5173:5173"
 
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: n8n
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: local_dev_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U n8n -d n8n"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   n8n:
     image: n8nio/n8n:latest
     env_file:
-      - ./n8n/.env.example
+      - ./n8n/env.example
     environment:
-      - N8N_DIAGNOSTICS_ENABLED=false
+      # Database
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: local_dev_password
+
+      # n8n Configuration
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678
+
+      # Security
+      N8N_BASIC_AUTH_ACTIVE: true
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: admin123
+
+      # Execution
+      EXECUTIONS_PROCESS: main
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: true
+
+      # Other settings
+      GENERIC_TIMEZONE: UTC
+      N8N_LOG_LEVEL: info
+      N8N_DIAGNOSTICS_ENABLED: false
     volumes:
-      - ./.data/n8n:/home/node/.n8n
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/.n8n/workflows:ro
     ports:
       - "5678:5678"
-    # healthcheck optional; n8n takes a bit to boot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 volumes:
   api_node_modules:
   web_node_modules:
+  postgres_data:
+  n8n_data:

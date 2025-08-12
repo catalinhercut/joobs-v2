@@ -1,0 +1,183 @@
+{
+  "name": "API Health Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "cron-1",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.example.com/health",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-1",
+      "name": "Check API Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check API response and determine status\nconst response = $input.first();\nconst statusCode = response.statusCode;\nconst responseTime = response.responseTime || 0;\n\nlet status = 'healthy';\nlet alert = false;\n\n// Check status code\nif (statusCode !== 200) {\n  status = 'unhealthy';\n  alert = true;\n}\n\n// Check response time (alert if > 5 seconds)\nif (responseTime > 5000) {\n  status = responseTime > 10000 ? 'critical' : 'slow';\n  alert = true;\n}\n\n// Prepare monitoring data\nconst monitoringData = {\n  timestamp: new Date().toISOString(),\n  service: 'api.example.com',\n  status: status,\n  statusCode: statusCode,\n  responseTime: responseTime,\n  alert: alert,\n  message: `API ${status} - Status: ${statusCode}, Response time: ${responseTime}ms`\n};\n\nconsole.log('API Health Check:', monitoringData);\n\nreturn {\n  json: monitoringData\n};"
+      },
+      "id": "function-1",
+      "name": "Analyze Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.alert}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-1",
+      "name": "Should Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🚨 API Alert: {{$json.message}}\",\n  \"attachments\": [\n    {\n      \"color\": \"{{$json.status === 'critical' ? 'danger' : 'warning'}}\",\n      \"fields\": [\n        {\n          \"title\": \"Service\",\n          \"value\": \"{{$json.service}}\",\n          \"short\": true\n        },\n        {\n          \"title\": \"Status\",\n          \"value\": \"{{$json.status}}\",\n          \"short\": true\n        },\n        {\n          \"title\": \"Response Time\",\n          \"value\": \"{{$json.responseTime}}ms\",\n          \"short\": true\n        },\n        {\n          \"title\": \"Timestamp\",\n          \"value\": \"{{$json.timestamp}}\",\n          \"short\": true\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "http-2",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1120,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log successful health check\nconst data = $input.first().json;\n\nconsole.log('✅ API healthy:', data.message);\n\nreturn {\n  json: {\n    ...data,\n    logged: true\n  }\n};"
+      },
+      "id": "function-2",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Check API Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check API Health": {
+      "main": [
+        [
+          {
+            "node": "Analyze Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Response": {
+      "main": [
+        [
+          {
+            "node": "Should Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "UTC",
+    "saveExecutionProgress": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "api-monitoring-automation",
+  "tags": [
+    {
+      "id": "monitoring",
+      "name": "monitoring"
+    },
+    {
+      "id": "api",
+      "name": "api"
+    },
+    {
+      "id": "alerts",
+      "name": "alerts"
+    }
+  ]
+}
