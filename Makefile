@@ -2,7 +2,7 @@ SHELL := /bin/sh
 COMPOSE_FILE := $(CURDIR)/docker-compose.local.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE)
 
-.PHONY: help up down logs ps restart rebuild health clean web-build web-preview api-dev web-dev n8n-logs n8n-restart n8n-shell n8n-backup n8n-restore
+.PHONY: help up down logs ps restart rebuild health clean web-build web-preview api-dev web-dev n8n-logs n8n-restart n8n-shell n8n-backup n8n-restore crawl4ai-logs
 
 help: ## Show available targets
 	@awk -F':.*##' '/^[a-zA-Z0-9_-]+:.*##/ {printf "\033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,6 +30,7 @@ health: ## Check service HTTP endpoints
 	@echo "Checking service health..."
 	@echo -n "API (3000): "; curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health 2>/dev/null || echo "DOWN"
 	@echo -n "WEB (5173): "; curl -s -o /dev/null -w "%{http_code}" http://localhost:5173 2>/dev/null || echo "DOWN"
+	@echo -n "crawl4ai (4000): "; curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/health 2>/dev/null || echo "DOWN"
 	@echo -n "n8n (5678): "; curl -s -o /dev/null -w "%{http_code}" http://localhost:5678/healthz 2>/dev/null || echo "DOWN"
 	@echo -n "PostgreSQL: "; $(COMPOSE) exec -T postgres pg_isready -U n8n 2>/dev/null | grep -q "accepting connections" && echo "UP" || echo "DOWN"
 
@@ -69,5 +70,8 @@ n8n-restore: ## Restore n8n database from backup file (Usage: make n8n-restore B
 	@echo "Restoring n8n database from backups/$(BACKUP)..."
 	$(COMPOSE) exec -T postgres psql -U n8n -d n8n < backups/$(BACKUP)
 	@echo "Database restored successfully"
+
+crawl4ai-logs: ## Show crawl4ai container logs
+	$(COMPOSE) logs -f crawl4ai
 
 

@@ -45,6 +45,26 @@ services:
       retries: 12
       start_period: 60s
 
+  crawl4ai:
+    build: ./crawl4ai
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      CHROME_BIN: /usr/bin/chromium-browser
+      CHROME_PATH: /usr/bin/chromium-browser
+      DATABASE_URL: postgresql://${POSTGRES_USER:-n8n}:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/${POSTGRES_DB:-n8n}
+    ports:
+      - "${CRAWL4AI_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.crawl4ai.rule=Host(`${CRAWL4AI_HOST}`) && PathPrefix(`/crawl`)"
+      - "traefik.http.routers.crawl4ai.entrypoints=websecure"
+      - "traefik.http.routers.crawl4ai.tls.certresolver=letsencrypt"
+      - "traefik.http.services.crawl4ai.loadbalancer.server.port=4000"
+
   n8n:
     image: n8nio/n8n:latest
     restart: unless-stopped
@@ -77,6 +97,7 @@ services:
       GENERIC_TIMEZONE: ${TIMEZONE:-UTC}
       N8N_LOG_LEVEL: ${N8N_LOG_LEVEL:-info}
       N8N_DIAGNOSTICS_ENABLED: false
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: false
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/home/node/.n8n/workflows:ro

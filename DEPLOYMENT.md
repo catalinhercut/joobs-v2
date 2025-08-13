@@ -4,7 +4,7 @@
 
 ### Option 1: Full Stack Deployment (Recommended)
 
-Deploy the entire application stack (API + Web + n8n + PostgreSQL) from the repository root:
+Deploy the entire application stack (API + Web + crawl4ai + n8n + PostgreSQL) from the repository root:
 
 1. **Create a new application in Coolify**
 2. **Set application type to "Docker Compose"**
@@ -33,6 +33,7 @@ N8N_BASIC_AUTH_PASSWORD=your_admin_password
 # Domains - Set your actual domains
 API_HOST=api.yourdomain.com
 WEB_HOST=yourdomain.com
+CRAWL4AI_HOST=crawl.yourdomain.com
 N8N_HOST=n8n.yourdomain.com
 WEBHOOK_URL=https://n8n.yourdomain.com
 
@@ -69,7 +70,8 @@ If you get "Nixpacks failed to detect the application type":
 
 After deployment:
 - **Web App**: `https://yourdomain.com`
-- **API**: `https://api.yourdomain.com`
+- **API**: `https://api.yourdomain.com/api/*`
+- **crawl4ai**: `https://crawl.yourdomain.com/crawl/*`
 - **n8n**: `https://n8n.yourdomain.com`
 
 ## 🔒 Security Notes
