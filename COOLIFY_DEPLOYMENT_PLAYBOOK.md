@@ -6,7 +6,9 @@ Stand up a stack with:
 
 * `api` – Node.js (ESM) HTTP API (Node **24**)
 * `web` – React (Vite) SPA (Node **24**)
+* `crawl4ai` – Web crawling service with crawl4ai (Node **24**)
 * `n8n` – automation service (`n8nio/n8n:latest`)
+* `postgres` – PostgreSQL database (shared by n8n and crawl4ai)
 
 Run **locally** via Docker for dev, and deploy to **production** with **Coolify on Hetzner** (Render-style UI for env vars, TLS, deploys). Plan for a future **staging** env.
 

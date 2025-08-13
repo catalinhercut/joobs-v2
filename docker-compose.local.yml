@@ -47,10 +47,33 @@ services:
       timeout: 5s
       retries: 10
 
+  crawl4ai:
+    image: node:24-alpine
+    working_dir: /app
+    env_file:
+      - ./.env.local
+      - ./crawl4ai/.env.example
+    volumes:
+      - ./crawl4ai:/app
+      - crawl4ai_node_modules:/app/node_modules
+    command: sh -c "apk add --no-cache python3 py3-pip build-base python3-dev libffi-dev openssl-dev chromium chromium-chromedriver && npm i && npm run dev"
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - CHROME_BIN=/usr/bin/chromium-browser
+      - CHROME_PATH=/usr/bin/chromium-browser
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   n8n:
     image: n8nio/n8n:latest
-    env_file:
-      - ./n8n/env.example
     environment:
       # Database
       DB_TYPE: postgresdb
@@ -71,8 +94,7 @@ services:
       N8N_BASIC_AUTH_USER: admin
       N8N_BASIC_AUTH_PASSWORD: admin123
 
-      # Execution
-      EXECUTIONS_PROCESS: main
+      # Execution settings
       EXECUTIONS_DATA_SAVE_ON_ERROR: all
       EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
       EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: true
@@ -81,6 +103,7 @@ services:
       GENERIC_TIMEZONE: UTC
       N8N_LOG_LEVEL: info
       N8N_DIAGNOSTICS_ENABLED: false
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: false
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/home/node/.n8n/workflows:ro
@@ -99,5 +122,6 @@ services:
 volumes:
   api_node_modules:
   web_node_modules:
+  crawl4ai_node_modules:
   postgres_data:
   n8n_data:
