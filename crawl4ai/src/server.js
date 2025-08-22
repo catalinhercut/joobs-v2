@@ -32,13 +32,30 @@ async function initDatabase() {
         status TEXT DEFAULT 'success'
       )
     `);
-    console.log("Database tables initialized");
+
+    // Create indexes for better performance
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_crawl_results_crawled_at 
+      ON crawl_results(crawled_at DESC)
+    `);
+    
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_crawl_results_status 
+      ON crawl_results(status)
+    `);
+    
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_crawl_results_url 
+      ON crawl_results(url)
+    `);
+
+    console.log("Database tables and indexes initialized");
   } catch (error) {
     console.error("Database initialization error:", error);
   }
 }
 
-// Crawl function
+// Crawl function with prompt support
 async function crawlUrl(url, options = {}) {
   try {
     // Fetch the HTML content
@@ -66,7 +83,15 @@ async function crawlUrl(url, options = {}) {
     ).remove();
 
     // Extract text content
-    const textContent = $("body").text().replace(/\s+/g, " ").trim();
+    let textContent = $("body").text().replace(/\s+/g, " ").trim();
+
+    // Apply extraction prompt if provided
+    if (options.extractionPrompt || options.prompt) {
+      const prompt = options.extractionPrompt || options.prompt;
+      // For now, we'll add the prompt as a prefix to help with context
+      // In a real implementation, you'd use an AI service here
+      textContent = `[Extraction Prompt: ${prompt}]\n\n${textContent}`;
+    }
 
     // Extract metadata
     const metadata = {
@@ -83,6 +108,7 @@ async function crawlUrl(url, options = {}) {
       contentType: response.headers["content-type"] || "",
       contentLength: textContent.length,
       timestamp: new Date().toISOString(),
+      extractionPrompt: options.extractionPrompt || options.prompt || null,
     };
 
     // Store in database
@@ -129,6 +155,7 @@ async function crawlUrl(url, options = {}) {
         code: error.code,
         status: error.response?.status,
         statusText: error.response?.statusText,
+        timestamp: new Date().toISOString(),
       }),
       "error",
     ];
@@ -190,13 +217,19 @@ export const startServer = (port = Number(process.env.PORT ?? 4000)) => {
       req.on("data", (chunk) => (body += chunk));
       req.on("end", async () => {
         try {
-          const { url, options } = JSON.parse(body);
+          const { url, options, prompt } = JSON.parse(body);
           if (!url) {
             res.writeHead(400);
             return res.end(JSON.stringify({ error: "URL is required" }));
           }
 
-          const result = await crawlUrl(url, options);
+          // Merge prompt into options
+          const crawlOptions = {
+            ...options,
+            extractionPrompt: prompt || options?.extractionPrompt,
+          };
+
+          const result = await crawlUrl(url, crawlOptions);
           res.writeHead(200);
           res.end(JSON.stringify(result));
         } catch (error) {
@@ -215,6 +248,32 @@ export const startServer = (port = Number(process.env.PORT ?? 4000)) => {
         res.writeHead(200);
         res.end(JSON.stringify({ results, count: results.length }));
       } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
+
+    // Get specific crawl result by ID
+    if (u.pathname.match(/^\/results\/\d+$/)) {
+      const id = u.pathname.split('/').pop();
+      try {
+        const query = `
+          SELECT id, url, title, content, metadata, crawled_at, status
+          FROM crawl_results
+          WHERE id = $1
+        `;
+        const result = await pool.query(query, [id]);
+        
+        if (result.rows.length === 0) {
+          res.writeHead(404);
+          return res.end(JSON.stringify({ error: "Crawl not found" }));
+        }
+        
+        res.writeHead(200);
+        res.end(JSON.stringify(result.rows[0]));
+      } catch (error) {
+        console.error("Database error:", error);
         res.writeHead(500);
         res.end(JSON.stringify({ error: error.message }));
       }

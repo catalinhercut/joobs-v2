@@ -74,4 +74,36 @@ n8n-restore: ## Restore n8n database from backup file (Usage: make n8n-restore B
 crawl4ai-logs: ## Show crawl4ai container logs
 	$(COMPOSE) logs -f crawl4ai
 
+install: ## Install all dependencies
+	cd web && npm install
+	cd api && npm install
+	cd crawl4ai && npm install
+
+dev: ## Start all services with Docker (recommended)
+	$(COMPOSE) up --build
+
+dev-detached: ## Start all services with Docker in background
+	$(COMPOSE) up --build -d
+
+dev-all: ## Start all services in development mode (without Docker)
+	@echo "Starting PostgreSQL with Docker..."
+	docker compose up postgres -d
+	@echo "Starting services in development mode..."
+	@echo "Open separate terminals and run:"
+	@echo "  make crawl4ai-dev"
+	@echo "  make api-dev"
+	@echo "  make web-dev"
+
+crawl4ai-dev: ## Run crawl4ai service in watch mode (without Docker)
+	cd crawl4ai && npm install && npm run dev
+
+test-crawl: ## Test crawl functionality
+	@echo "Testing crawl endpoint..."
+	curl -X POST http://localhost:3000/crawl \
+		-H "Content-Type: application/json" \
+		-d '{"url": "https://example.com", "prompt": "Extract the main heading and description"}'
+
+db-shell: ## Open PostgreSQL shell
+	$(COMPOSE) exec postgres psql -U n8n -d n8n
+
 
