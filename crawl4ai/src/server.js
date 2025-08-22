@@ -4,20 +4,25 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import puppeteer from "puppeteer";
 import pg from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
+// Environment variables are passed from docker-compose, no need for dotenv
 
 const { Pool } = pg;
 
 // Database connection
-const pool = new Pool({
+const dbConfig = {
   host: process.env.DB_HOST || "postgres",
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || "n8n",
   user: process.env.DB_USER || "n8n",
   password: process.env.DB_PASSWORD || "changeme123",
+};
+
+console.log("Database config:", {
+  ...dbConfig,
+  password: "***"
 });
+
+const pool = new Pool(dbConfig);
 
 // Initialize database tables
 async function initDatabase() {

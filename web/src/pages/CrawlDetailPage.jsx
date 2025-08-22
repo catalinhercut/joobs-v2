@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Label } from "../components/ui/label";
-import { ArrowLeft, ExternalLink, Calendar, FileText, Globe, Hash, Clock } from "lucide-react";
+import { ArrowLeft, ExternalLink, Calendar, FileText, Globe, Hash, Clock, RotateCcw } from "lucide-react";
 
 export const CrawlDetailPage = () => {
   const { id } = useParams();
@@ -12,6 +12,7 @@ export const CrawlDetailPage = () => {
   const [crawl, setCrawl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [rerunning, setRerunning] = useState(false);
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
@@ -45,6 +46,50 @@ export const CrawlDetailPage = () => {
   const formatContent = (content) => {
     if (!content) return "";
     return content.replace(/\n\s*\n/g, '\n\n').trim();
+  };
+
+  const handleRerun = async () => {
+    if (!crawl) return;
+    
+    try {
+      setRerunning(true);
+      
+      // Extract the original prompt from metadata
+      const metadata = typeof crawl.metadata === 'string' 
+        ? JSON.parse(crawl.metadata) 
+        : crawl.metadata || {};
+      
+      const payload = {
+        url: crawl.url,
+        prompt: metadata.extractionPrompt || ""
+      };
+
+      const res = await fetch(`${apiBase}/crawl`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to rerun crawl: ${res.status}`);
+      }
+
+      const result = await res.json();
+      
+      if (result.success) {
+        // Navigate to the new crawl result
+        navigate(`/crawl/${result.id}`);
+      } else {
+        throw new Error(result.error || "Crawl failed");
+      }
+    } catch (error) {
+      console.error("Failed to rerun crawl:", error);
+      setError(`Failed to rerun crawl: ${error.message}`);
+    } finally {
+      setRerunning(false);
+    }
   };
 
   if (loading) {
@@ -102,9 +147,20 @@ export const CrawlDetailPage = () => {
             <p className="text-muted-foreground">ID: {crawl.id}</p>
           </div>
         </div>
-        <Badge variant={crawl.status === "success" ? "default" : "destructive"}>
-          {crawl.status}
-        </Badge>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRerun}
+            disabled={rerunning}
+          >
+            <RotateCcw className={`mr-2 h-4 w-4 ${rerunning ? 'animate-spin' : ''}`} />
+            {rerunning ? 'Rerunning...' : 'Rerun'}
+          </Button>
+          <Badge variant={crawl.status === "success" ? "default" : "destructive"}>
+            {crawl.status}
+          </Badge>
+        </div>
       </div>
 
       {/* Basic Information */}
@@ -225,6 +281,20 @@ export const CrawlDetailPage = () => {
                     <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
                     <p className="text-sm">{formatDate(metadata.timestamp)}</p>
                   </div>
+                </div>
+              )}
+              {metadata.extractionPrompt && (
+                <div className="md:col-span-2">
+                  <Label className="text-sm font-medium">Extraction Prompt</Label>
+                  <div className="bg-muted/50 p-3 rounded-md mt-1">
+                    <p className="text-sm font-mono">{metadata.extractionPrompt}</p>
+                  </div>
+                </div>
+              )}
+              {metadata.crawlMethod && (
+                <div>
+                  <Label className="text-sm font-medium">Crawl Method</Label>
+                  <p className="text-sm mt-1">{metadata.crawlMethod}</p>
                 </div>
               )}
             </div>
