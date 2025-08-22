@@ -3,9 +3,9 @@ import { URL } from "node:url";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import pg from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
+// Environment variables are provided by docker-compose
+// import dotenv from "dotenv";
+// dotenv.config();
 
 const { Pool } = pg;
 
@@ -15,7 +15,7 @@ const pool = new Pool({
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || "n8n",
   user: process.env.DB_USER || "n8n",
-  password: process.env.DB_PASSWORD || "local_dev_password",
+  password: process.env.DB_PASSWORD || "changeme123",
 });
 
 // Initialize database tables

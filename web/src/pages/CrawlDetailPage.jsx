@@ -86,7 +86,7 @@ export const CrawlDetailPage = () => {
     );
   }
 
-  const metadata = crawl.metadata ? JSON.parse(crawl.metadata) : {};
+  const metadata = crawl.metadata || {};
 
   return (
     <div className="space-y-6">

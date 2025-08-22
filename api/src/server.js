@@ -1,9 +1,9 @@
 import http from "node:http";
 import { URL } from "node:url";
 import pg from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
+// Environment variables are provided by docker-compose
+// import dotenv from "dotenv";
+// dotenv.config();
 
 const { Pool } = pg;
 const CRAWL4AI_URL = process.env.CRAWL4AI_API_URL || "http://crawl4ai:4000";
@@ -38,6 +38,30 @@ export const startServer = (port = Number(process.env.PORT ?? 3000)) => {
     if (u.pathname === "/ready") {
       res.writeHead(200);
       return res.end(JSON.stringify({ ready: true }));
+    }
+
+    // Get all crawl results
+    if (u.pathname === "/crawl/results" && req.method === "GET") {
+      try {
+        const limit = parseInt(u.searchParams.get("limit")) || 50;
+        const offset = parseInt(u.searchParams.get("offset")) || 0;
+        
+        const query = `
+          SELECT id, url, title, content, metadata, crawled_at, status
+          FROM crawl_results
+          ORDER BY crawled_at DESC
+          LIMIT $1 OFFSET $2
+        `;
+        const result = await pool.query(query, [limit, offset]);
+        
+        res.writeHead(200);
+        res.end(JSON.stringify({ results: result.rows, count: result.rows.length }));
+      } catch (error) {
+        console.error("Database error:", error);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: "Database error" }));
+      }
+      return;
     }
 
     // Get specific crawl result by ID
