@@ -1,15 +1,13 @@
 {
   "name": "crawl4ai-service",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Crawl4AI service wrapper for deployment",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "start": "echo 'Using official crawl4ai Docker image'",
+    "dev": "echo 'Using official crawl4ai Docker image'"
   },
-  "dependencies": {
-    "axios": "^1.6.0",
-    "pg": "^8.11.3",
-    "cheerio": "^1.0.0",
-    "puppeteer": "^24.9.0"
-  }
+  "keywords": ["crawl4ai", "web-scraping", "ai"],
+  "author": "",
+  "license": "MIT"
 }

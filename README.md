@@ -33,13 +33,13 @@ A modern web crawling application with AI-powered content extraction, built with
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │    Web      │    │     API     │    │   Crawl4AI  │    │ PostgreSQL  │
-│   (React)   │◄──►│  (Node.js)  │◄──►│  (Node.js)  │◄──►│ (Database)  │
+│   (React)   │◄──►│  (Node.js)  │◄──►│  (Official) │◄──►│ (Database)  │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
 - **Web**: React frontend with shadcn/ui components
-- **API**: Node.js proxy server for routing requests
-- **Crawl4AI**: Specialized crawling service with Cheerio
+- **API**: Node.js proxy server for routing requests and database operations
+- **Crawl4AI**: Official crawl4ai Docker image (unclecode/crawl4ai:0.7.3)
 - **PostgreSQL**: Database for storing crawl results
 
 ## Getting Started
@@ -70,7 +70,7 @@ A modern web crawling application with AI-powered content extraction, built with
 4. **Access the application**
    - Web Interface: http://localhost:5173
    - API: http://localhost:3000
-   - Crawl4AI Service: http://localhost:4000
+   - Crawl4AI Service: http://localhost:11235
 
 ### Development Setup
 
@@ -82,22 +82,22 @@ A modern web crawling application with AI-powered content extraction, built with
    # API server
    cd ../api && npm install
 
-   # Crawl4AI service
-   cd ../crawl4ai && npm install
+   # Crawl4AI service uses official Docker image (no npm install needed)
    ```
 
 2. **Start development servers**
    ```bash
-   # Terminal 1 - Database
-   docker-compose up postgres
+   # Start all services with Docker Compose
+   docker-compose -f docker-compose.local.yml up -d
 
-   # Terminal 2 - Crawl4AI service
-   cd crawl4ai && npm run dev
+   # Or start individually:
+   # Terminal 1 - Database & Crawl4AI
+   docker-compose -f docker-compose.local.yml up postgres crawl4ai
 
-   # Terminal 3 - API server
+   # Terminal 2 - API server (development mode)
    cd api && npm run dev
 
-   # Terminal 4 - Web frontend
+   # Terminal 3 - Web frontend (development mode)
    cd web && npm run dev
    ```
 
@@ -160,17 +160,16 @@ DB_PORT=5432
 DB_NAME=n8n
 DB_USER=n8n
 DB_PASSWORD=changeme123
-CRAWL4AI_API_URL=http://crawl4ai:4000
+CRAWL4AI_API_URL=http://crawl4ai:11235
 ```
 
 ### Crawl4AI (.env)
 ```
-PORT=4000
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=n8n
-DB_USER=n8n
-DB_PASSWORD=changeme123
+# Using official crawl4ai Docker image
+# AI Configuration (optional)
+OPENAI_API_KEY=your-openai-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+OLLAMA_URL=http://localhost:11434
 ```
 
 ## Contributing

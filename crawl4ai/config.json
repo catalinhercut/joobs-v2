@@ -1,0 +1,23 @@
+{
+  "service": "crawl4ai",
+  "version": "0.7.3",
+  "description": "Official Crawl4AI service for web crawling and content extraction",
+  "port": 11235,
+  "endpoints": {
+    "health": "/health",
+    "docs": "/docs",
+    "crawl": "/crawl",
+    "markdown": "/md",
+    "html": "/html",
+    "screenshot": "/screenshot",
+    "pdf": "/pdf"
+  },
+  "features": [
+    "Web crawling",
+    "Content extraction",
+    "AI-powered analysis",
+    "Markdown conversion",
+    "Screenshot generation",
+    "PDF generation"
+  ]
+}

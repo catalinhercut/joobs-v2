@@ -6,7 +6,7 @@ import pg from "pg";
 // dotenv.config();
 
 const { Pool } = pg;
-const CRAWL4AI_URL = process.env.CRAWL4AI_API_URL || "http://crawl4ai:4000";
+const CRAWL4AI_URL = process.env.CRAWL4AI_API_URL || "http://crawl4ai:11235";
 
 // Database connection
 const pool = new Pool({
@@ -16,6 +16,43 @@ const pool = new Pool({
   user: process.env.DB_USER || "n8n",
   password: process.env.DB_PASSWORD || "changeme123",
 });
+
+// Initialize database tables
+async function initDatabase() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS crawl_results (
+        id SERIAL PRIMARY KEY,
+        url TEXT NOT NULL,
+        title TEXT,
+        content TEXT,
+        metadata JSONB,
+        crawled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'success'
+      )
+    `);
+
+    // Create indexes for better performance
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_crawl_results_crawled_at 
+      ON crawl_results(crawled_at DESC)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_crawl_results_status 
+      ON crawl_results(status)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_crawl_results_url 
+      ON crawl_results(url)
+    `);
+
+    console.log("Database tables and indexes initialized");
+  } catch (error) {
+    console.error("Database initialization error:", error);
+  }
+}
 
 export const startServer = (port = Number(process.env.PORT ?? 3000)) => {
   const server = http.createServer(async (req, res) => {
@@ -90,31 +127,120 @@ export const startServer = (port = Number(process.env.PORT ?? 3000)) => {
       return;
     }
 
-    // Proxy crawl4ai endpoints
-    if (u.pathname.startsWith("/crawl")) {
-      const crawlUrl = `${CRAWL4AI_URL}${u.pathname}${u.search}`;
-      const proxyReq = http.request(
-        crawlUrl,
-        {
-          method: req.method,
-          headers: {
-            ...req.headers,
-            host: new URL(CRAWL4AI_URL).host,
-          },
-        },
-        (proxyRes) => {
-          res.writeHead(proxyRes.statusCode, proxyRes.headers);
-          proxyRes.pipe(res);
+    // Handle crawl requests - convert to crawl4ai format
+    if (u.pathname === "/crawl" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { url, prompt, options } = JSON.parse(body);
+          if (!url) {
+            res.writeHead(400);
+            return res.end(JSON.stringify({ error: "URL is required" }));
+          }
+
+          console.log(`Crawling URL: ${url} with prompt: ${prompt || 'none'}`);
+
+          // Use the markdown endpoint for better content extraction
+          const crawl4aiResponse = await fetch(`${CRAWL4AI_URL}/md`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: url,
+              f: prompt ? 'llm' : 'fit', // Use LLM filter if prompt provided
+              q: prompt || null
+            })
+          });
+
+          if (!crawl4aiResponse.ok) {
+            const errorText = await crawl4aiResponse.text();
+            throw new Error(`Crawl4AI error: ${errorText}`);
+          }
+
+          const crawl4aiResult = await crawl4aiResponse.json();
+
+          // Store in database
+          const query = `
+            INSERT INTO crawl_results (url, title, content, metadata, status)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, crawled_at
+          `;
+
+          // Extract title from markdown (first heading)
+          const titleMatch = crawl4aiResult.markdown?.match(/^#\s+(.+)$/m);
+          const title = titleMatch ? titleMatch[1] : null;
+
+          const values = [
+            url,
+            title,
+            crawl4aiResult.markdown || '',
+            JSON.stringify({
+              filter: crawl4aiResult.filter,
+              query: crawl4aiResult.query,
+              cache: crawl4aiResult.cache,
+              extractionPrompt: prompt,
+              crawlMethod: 'crawl4ai',
+              timestamp: new Date().toISOString()
+            }),
+            crawl4aiResult.success ? "success" : "error",
+          ];
+
+          const dbResult = await pool.query(query, values);
+
+          const result = {
+            id: dbResult.rows[0].id,
+            url,
+            title,
+            content: crawl4aiResult.markdown || '',
+            metadata: {
+              filter: crawl4aiResult.filter,
+              query: crawl4aiResult.query,
+              extractionPrompt: prompt
+            },
+            crawled_at: dbResult.rows[0].crawled_at,
+            success: crawl4aiResult.success || false,
+          };
+
+          res.writeHead(200);
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          console.error("Crawl error:", error);
+          
+          // Store error in database
+          try {
+            const query = `
+              INSERT INTO crawl_results (url, content, metadata, status)
+              VALUES ($1, $2, $3, $4)
+              RETURNING id, crawled_at
+            `;
+
+            const values = [
+              JSON.parse(body).url || 'unknown',
+              error.message,
+              JSON.stringify({
+                error: error.message,
+                timestamp: new Date().toISOString(),
+                crawlMethod: 'crawl4ai'
+              }),
+              "error",
+            ];
+
+            const dbResult = await pool.query(query, values);
+
+            res.writeHead(500);
+            res.end(JSON.stringify({
+              id: dbResult.rows[0].id,
+              error: error.message,
+              crawled_at: dbResult.rows[0].crawled_at,
+              success: false,
+            }));
+          } catch (dbError) {
+            console.error("Database error:", dbError);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: error.message, success: false }));
+          }
         }
-      );
-
-      proxyReq.on("error", (err) => {
-        console.error("Proxy error:", err);
-        res.writeHead(500);
-        res.end(JSON.stringify({ error: "Crawl service unavailable" }));
       });
-
-      req.pipe(proxyReq);
       return;
     }
 
@@ -143,4 +269,10 @@ export const startServer = (port = Number(process.env.PORT ?? 3000)) => {
   return server;
 };
 
-startServer();
+// Initialize and start
+async function main() {
+  await initDatabase();
+  startServer();
+}
+
+main().catch(console.error);

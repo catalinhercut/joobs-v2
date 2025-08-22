@@ -1,39 +1,77 @@
 # Crawl4AI Service
 
-A web crawling service built with crawl4ai that stores results in PostgreSQL.
+This service uses the official crawl4ai Docker image (`unclecode/crawl4ai:0.7.3`) for web crawling and content extraction.
 
-## Endpoints
+## Features
 
-- `POST /crawl` - Crawl a URL
-- `GET /results` - Get crawl results with pagination
+- **Official Crawl4AI**: Uses the latest stable version of crawl4ai
+- **AI Integration**: Supports OpenAI, Anthropic, and Ollama for content extraction
+- **Multiple Endpoints**: Provides various endpoints for different use cases
+- **High Performance**: Built with Python and optimized for speed
+
+## API Endpoints
+
+The service runs on port 11235 and provides the following endpoints:
+
+### Main Endpoints
+- `POST /crawl` - Crawl URLs and return structured data
+- `POST /md` - Get markdown content from URLs
+- `POST /html` - Get processed HTML content
+- `POST /screenshot` - Generate screenshots
+- `POST /pdf` - Generate PDF documents
+
+### Utility Endpoints
 - `GET /health` - Health check
-- `GET /` - Service info
+- `GET /docs` - API documentation (Swagger UI)
+- `GET /openapi.json` - OpenAPI specification
 
-## Usage
+## Environment Variables
 
-### Crawl a URL
 ```bash
-curl -X POST http://localhost:4000/crawl \
+# AI Provider Configuration
+OPENAI_API_KEY=your-openai-api-key-here
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+OLLAMA_URL=http://localhost:11434
+```
+
+## Usage Examples
+
+### Basic Crawling
+```bash
+curl -X POST http://localhost:11235/crawl \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://example.com"]}'
+```
+
+### Markdown Extraction
+```bash
+curl -X POST http://localhost:11235/md \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 ```
 
-### Get Results
+### AI-Powered Extraction
 ```bash
-curl "http://localhost:4000/results?limit=10&offset=0"
+curl -X POST http://localhost:11235/md \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "f": "llm",
+    "q": "Extract all product names and prices"
+  }'
 ```
 
-## Local Development
+## Deployment
 
-The service runs on port 4000 and connects to the shared PostgreSQL database.
+### Docker
+```bash
+docker build -t crawl4ai-service .
+docker run -p 11235:11235 crawl4ai-service
+```
 
-## Database Schema
+### Docker Compose
+The service is configured in the main docker-compose files and will be automatically started with the other services.
 
-The service creates a `crawl_results` table with:
-- `id` - Auto-incrementing primary key
-- `url` - The crawled URL
-- `title` - Page title
-- `content` - Extracted content (markdown/HTML)
-- `metadata` - JSON metadata from crawl4ai
-- `crawled_at` - Timestamp
-- `status` - success/failed/error
+## Documentation
+
+For complete API documentation, visit `/docs` endpoint when the service is running, or check the official crawl4ai documentation at: https://github.com/unclecode/crawl4ai
