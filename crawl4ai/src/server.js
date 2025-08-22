@@ -2,10 +2,11 @@ import http from "node:http";
 import { URL } from "node:url";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import puppeteer from "puppeteer";
 import pg from "pg";
-// Environment variables are provided by docker-compose
-// import dotenv from "dotenv";
-// dotenv.config();
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const { Pool } = pg;
 
@@ -55,60 +56,141 @@ async function initDatabase() {
   }
 }
 
-// Crawl function with prompt support
-async function crawlUrl(url, options = {}) {
-  try {
-    // Fetch the HTML content
-    const response = await axios.get(url, {
-      timeout: 30000,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-      },
-      maxRedirects: 5,
+// Browser instance for reuse
+let browser = null;
+
+async function getBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      headless: true,
+      executablePath: '/usr/bin/chromium-browser',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
+      ]
     });
+  }
+  return browser;
+}
 
-    const html = response.data;
-
-    // Parse with cheerio
-    const $ = cheerio.load(html);
-
-    // Extract title
-    const title =
-      $("title").text().trim() || $("h1").first().text().trim() || "";
-
-    // Remove script, style, and other non-content elements
-    $(
-      "script, style, nav, header, footer, aside, .nav, .header, .footer, .sidebar"
-    ).remove();
-
-    // Extract text content
-    let textContent = $("body").text().replace(/\s+/g, " ").trim();
-
+// Crawl function with Puppeteer for JavaScript support
+async function crawlUrl(url, options = {}) {
+  let page = null;
+  try {
+    const browser = await getBrowser();
+    page = await browser.newPage();
+    
+    // Set user agent and viewport
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1920, height: 1080 });
+    
+    // Set timeout and navigation options
+    const timeout = options.timeout || 60000;
+    await page.setDefaultTimeout(timeout);
+    
+    console.log(`Crawling URL: ${url}`);
+    
+    // Navigate to the page with more lenient wait conditions
+    await page.goto(url, { 
+      waitUntil: ['domcontentloaded'],
+      timeout 
+    });
+    
+    // Wait a bit more for any dynamic content to load
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Extract page content
+    const pageData = await page.evaluate(() => {
+      // Remove unwanted elements
+      const elementsToRemove = document.querySelectorAll(
+        'script, style, nav, header, footer, aside, .nav, .header, .footer, .sidebar, .advertisement, .ads, .cookie-banner'
+      );
+      elementsToRemove.forEach(el => el.remove());
+      
+      // Get title
+      const title = document.title || document.querySelector('h1')?.textContent?.trim() || '';
+      
+      // Get main content
+      let textContent = document.body?.textContent || '';
+      textContent = textContent.replace(/\s+/g, ' ').trim();
+      
+      // Get metadata
+      const getMetaContent = (selector) => {
+        const element = document.querySelector(selector);
+        return element ? element.getAttribute('content') || element.getAttribute('href') || '' : '';
+      };
+      
+      return {
+        title,
+        textContent,
+        metadata: {
+          title,
+          description: getMetaContent('meta[name="description"]'),
+          keywords: getMetaContent('meta[name="keywords"]'),
+          ogTitle: getMetaContent('meta[property="og:title"]'),
+          ogDescription: getMetaContent('meta[property="og:description"]'),
+          ogImage: getMetaContent('meta[property="og:image"]'),
+          canonical: getMetaContent('link[rel="canonical"]'),
+          author: getMetaContent('meta[name="author"]'),
+          url: window.location.href,
+          timestamp: new Date().toISOString()
+        }
+      };
+    });
+    
     // Apply extraction prompt if provided
+    let finalContent = pageData.textContent;
     if (options.extractionPrompt || options.prompt) {
       const prompt = options.extractionPrompt || options.prompt;
-      // For now, we'll add the prompt as a prefix to help with context
-      // In a real implementation, you'd use an AI service here
-      textContent = `[Extraction Prompt: ${prompt}]\n\n${textContent}`;
+      
+      // Try to extract specific content based on the prompt
+      if (prompt.toLowerCase().includes('game') || prompt.toLowerCase().includes('casino')) {
+        // Look for game-related content
+        const gameContent = await page.evaluate(() => {
+          const gameElements = document.querySelectorAll(
+            '[class*="game"], [class*="slot"], [class*="casino"], [data-game], .game-item, .slot-item, .casino-game'
+          );
+          
+          const games = [];
+          gameElements.forEach(el => {
+            const text = el.textContent?.trim();
+            if (text && text.length > 2 && text.length < 100) {
+              games.push(text);
+            }
+          });
+          
+          // Also look for links that might be games
+          const gameLinks = document.querySelectorAll('a[href*="game"], a[href*="slot"], a[href*="casino"]');
+          gameLinks.forEach(link => {
+            const text = link.textContent?.trim();
+            if (text && text.length > 2 && text.length < 100) {
+              games.push(text);
+            }
+          });
+          
+          return games.length > 0 ? games.join('\n') : null;
+        });
+        
+        if (gameContent) {
+          finalContent = `Games found:\n${gameContent}\n\nFull page content:\n${pageData.textContent}`;
+        }
+      }
     }
-
-    // Extract metadata
+    
+    // Enhanced metadata
     const metadata = {
-      title,
-      description: $('meta[name="description"]').attr("content") || "",
-      keywords: $('meta[name="keywords"]').attr("content") || "",
-      ogTitle: $('meta[property="og:title"]').attr("content") || "",
-      ogDescription: $('meta[property="og:description"]').attr("content") || "",
-      ogImage: $('meta[property="og:image"]').attr("content") || "",
-      canonical: $('link[rel="canonical"]').attr("href") || "",
-      author: $('meta[name="author"]').attr("content") || "",
-      url: response.request.res.responseUrl || url,
-      statusCode: response.status,
-      contentType: response.headers["content-type"] || "",
-      contentLength: textContent.length,
-      timestamp: new Date().toISOString(),
+      ...pageData.metadata,
+      contentLength: finalContent.length,
       extractionPrompt: options.extractionPrompt || options.prompt || null,
+      crawlMethod: 'puppeteer',
+      loadTime: Date.now() - Date.now() // This would be calculated properly in real implementation
     };
 
     // Store in database
@@ -120,19 +202,21 @@ async function crawlUrl(url, options = {}) {
 
     const values = [
       url,
-      title || null,
-      textContent,
+      pageData.title || null,
+      finalContent,
       JSON.stringify(metadata),
       "success",
     ];
 
     const dbResult = await pool.query(query, values);
 
+    console.log(`Successfully crawled ${url} - Content length: ${finalContent.length}`);
+
     return {
       id: dbResult.rows[0].id,
       url,
-      title,
-      content: textContent,
+      title: pageData.title,
+      content: finalContent,
       metadata,
       crawled_at: dbResult.rows[0].crawled_at,
       success: true,
@@ -153,9 +237,8 @@ async function crawlUrl(url, options = {}) {
       JSON.stringify({
         error: error.message,
         code: error.code,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
         timestamp: new Date().toISOString(),
+        crawlMethod: 'puppeteer'
       }),
       "error",
     ];
@@ -169,6 +252,10 @@ async function crawlUrl(url, options = {}) {
       crawled_at: dbResult.rows[0].crawled_at,
       success: false,
     };
+  } finally {
+    if (page) {
+      await page.close();
+    }
   }
 }
 
