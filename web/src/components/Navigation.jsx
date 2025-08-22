@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Globe, History, Home } from "lucide-react";
+import { Globe, History, Home, Settings } from "lucide-react";
 
 export const Navigation = () => {
   const location = useLocation();
@@ -37,6 +37,17 @@ export const Navigation = () => {
               <Link to="/history" className="flex items-center space-x-2">
                 <History className="h-4 w-4" />
                 <span>History</span>
+              </Link>
+            </Button>
+            
+            <Button
+              variant={isActive("/config") ? "default" : "ghost"}
+              size="sm"
+              asChild
+            >
+              <Link to="/config" className="flex items-center space-x-2">
+                <Settings className="h-4 w-4" />
+                <span>Config</span>
               </Link>
             </Button>
           </div>
